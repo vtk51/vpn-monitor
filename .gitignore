@@ -1,0 +1,16 @@
+# Generated binaries, logs and local QA evidence
+*.exe
+*.test
+*.log
+*.out
+*-verification.json
+*.png
+__pycache__/
+*.pyc
+reports/
+qa-output/
+tmp/
+.temp/
+.DS_Store
+Thumbs.db
+# Keep app.ico and resource_windows_amd64.syso tracked.
