@@ -3,6 +3,7 @@ package main
 import "sync"
 
 type monitorState struct {
+	config              settings
 	youtubeOutages      uint64
 	youtubeOutageActive bool
 	paused              bool
@@ -17,7 +18,7 @@ type monitorState struct {
 }
 
 func newMonitorState() *monitorState {
-	s := &monitorState{}
+	s := &monitorState{config: defaultSettings()}
 	for i := range s.rows {
 		s.rows[i] = "Ожидание проверки…"
 	}

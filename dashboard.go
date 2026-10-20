@@ -38,6 +38,7 @@ func (s *monitorState) waitRunning(ctx context.Context) bool {
 }
 
 type dashboardView struct {
+	Config          settings
 	YouTubeOutages  uint64
 	Nodes           [5]nodeState
 	Samples         []nodeState
@@ -57,7 +58,7 @@ func (s *monitorState) view(now time.Time) dashboardView {
 	s.mu.Lock()
 	defer s.mu.Unlock()
 	s.prune(now)
-	return dashboardView{YouTubeOutages: s.youtubeOutages, Nodes: s.nodes, Samples: append([]nodeState(nil), s.samples...), Journal: append([]string(nil), s.journal...), Paused: s.paused, Verbose: s.verbose, Cycles: s.cycles}
+	return dashboardView{Config: s.config, YouTubeOutages: s.youtubeOutages, Nodes: s.nodes, Samples: append([]nodeState(nil), s.samples...), Journal: append([]string(nil), s.journal...), Paused: s.paused, Verbose: s.verbose, Cycles: s.cycles}
 }
 func (s *monitorState) finishCycle(line string) {
 	s.mu.Lock()
@@ -80,8 +81,6 @@ type nodeState struct {
 	Elapsed  time.Duration
 	At       time.Time
 }
-
-var nodeNames = [5]string{"Debian", "Router", "Yandex", "YouTube", "DNS"}
 
 func (s *monitorState) record(i int, ok bool, elapsed time.Duration, at time.Time) {
 	s.mu.Lock()
@@ -107,9 +106,9 @@ func (s *monitorState) record(i int, ok bool, elapsed time.Duration, at time.Tim
 		} else if old.Seen {
 			label = "Восстановлено"
 		}
-		s.appendEvent(fmt.Sprintf("%s   %s   ·   %s", at.Format("15:04:05"), label, nodeNames[i]))
+		s.appendEvent(fmt.Sprintf("%s   %s   ·   %s", at.Format("15:04:05"), label, s.config.identity(i)))
 	}
-	s.rows[i] = fmt.Sprintf("%s | %v | %.2f мс", nodeNames[i], ok, float64(elapsed.Microseconds())/1000)
+	s.rows[i] = fmt.Sprintf("%s | %v | %.2f мс", s.config.identity(i), ok, float64(elapsed.Microseconds())/1000)
 	s.revision++
 }
 func (s *monitorState) appendEvent(line string) {

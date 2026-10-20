@@ -44,12 +44,15 @@ func (p *pinger) ping(ip string, timeout time.Duration) bool {
 	return count > 0 && binary.LittleEndian.Uint32(reply[4:8]) == 0
 }
 func checkDNS(parent context.Context, server string, timeout time.Duration) bool {
+	return checkDNSDomain(parent, server, "youtube.com", timeout)
+}
+func checkDNSDomain(parent context.Context, server, domain string, timeout time.Duration) bool {
 	ctx, cancel := context.WithTimeout(parent, timeout)
 	defer cancel()
 	resolver := &net.Resolver{PreferGo: true, StrictErrors: true, Dial: func(ctx context.Context, network, address string) (net.Conn, error) {
 		return (&net.Dialer{Timeout: timeout}).DialContext(ctx, network, server)
 	}}
-	ips, err := resolver.LookupIP(ctx, "ip4", "youtube.com")
+	ips, err := resolver.LookupIP(ctx, "ip4", domain)
 	return err == nil && len(ips) > 0
 }
 func consoleSetup() { kernel.NewProc("SetConsoleOutputCP").Call(65001) }

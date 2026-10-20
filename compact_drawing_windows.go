@@ -108,7 +108,7 @@ func drawDashboard(dc, h uintptr) {
 			headline = "Все узлы доступны"
 			col = green
 		} else if v.Nodes[3].Seen && !v.Nodes[3].OK {
-			headline = "YouTube не отвечает"
+			headline = v.Config.Targets[3].Name + " не отвечает"
 		}
 	}
 	if v.Paused {
@@ -140,12 +140,12 @@ func drawDashboard(dc, h uintptr) {
 		}
 		stroke(dc, 14, y+28, 366, y+28, 0x272e38, 1)
 		text(dc, 14, y, 12, 29, "●", 9, c)
-		text(dc, 29, y, 82, 29, nodeNames[i], 12, ink)
-		addr := targets[i].ip
+		text(dc, 29, y, 82, 29, v.Config.node(i).Name, 12, ink)
+		addr := v.Config.node(i).IP
 		text(dc, 112, y, 157, 29, addr, 10, 0x788597)
 		label(dc, 274, y, 92, 29, s, 12, c, 2)
 	}
-	text(dc, 14, 235, 64, 15, "YouTube", 10, muted)
+	text(dc, 14, 235, 64, 15, v.Config.Targets[3].Name, 10, muted)
 	text(dc, 14, 250, 64, 15, "60 секунд", 10, 0xb4c0d2)
 	stroke(dc, 87, 259, 366, 259, 0x29323e, 1)
 	maxMS := float64(100)
@@ -191,10 +191,10 @@ func drawDashboard(dc, h uintptr) {
 	feedback := ""
 	hc := muted
 	if hintError {
-		feedback = "1–60000 мс"
+		feedback = "Ошибка · см. подсказку"
 		hc = red
 	} else if settingsHint != "Применяется со следующей проверки" {
-		feedback = "Применено"
+		feedback = "Сохранено"
 		hc = green
 	}
 	text(dc, 201, 281, 125, 25, feedback, 10, hc)

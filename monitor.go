@@ -27,7 +27,11 @@ func formatResult(ts time.Time, r []result) (string, bool) {
 				failed = append(failed, fmt.Sprintf("%s=%.2fs", v.name, v.elapsed.Seconds()))
 			}
 		}
-		return fmt.Sprintf("[%s] ВНИМАНИЕ: Сбой YouTube (192.178.24.110)! Debian(107)=%s, Router=%s, Ya=%s, DNS=%s | Неответ: %s", stamp, boolText(r[0].ok), boolText(r[1].ok), boolText(r[2].ok), boolText(r[4].ok), strings.Join(failed, ", ")), true
+		statuses := []string{}
+		for _, v := range r {
+			statuses = append(statuses, v.name+"="+boolText(v.ok))
+		}
+		return fmt.Sprintf("[%s] ВНИМАНИЕ: Сбой %s! %s | Неответ: %s", stamp, r[3].name, strings.Join(statuses, ", "), strings.Join(failed, ", ")), true
 	}
 	times := []string{}
 	for _, v := range r {

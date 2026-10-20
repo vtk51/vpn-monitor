@@ -10,8 +10,6 @@ import (
 	"time"
 )
 
-var targets = []struct{ name, ip string }{{"Debian", "192.168.1.107"}, {"Router", "192.168.1.100"}, {"Yandex", "77.88.44.242"}, {"YouTube", "192.178.24.110"}, {"DNS", "192.168.1.107:53"}}
-
 func monitor(ctx context.Context, c *liveConfig, s *monitorState) {
 	exe, err := os.Executable()
 	if err != nil {
@@ -35,19 +33,21 @@ func monitor(ctx context.Context, c *liveConfig, s *monitorState) {
 		if !s.waitRunning(ctx) {
 			return
 		}
+		cfg, generation := c.snapshot()
 		ts := time.Now()
 		results := make([]result, 0, 5)
-		for i, target := range targets {
+		for i := 0; i < 5; i++ {
+			target := cfg.node(i)
 			if !s.waitRunning(ctx) {
 				return
 			}
-			timeout := c.timeout()
+			timeout := time.Duration(cfg.TimeoutMS) * time.Millisecond
 			start := time.Now()
 			var ok bool
 			if i == 4 {
-				ok = checkDNS(ctx, target.ip, timeout)
+				ok = checkDNSDomain(ctx, target.IP, cfg.DNSDomain, timeout)
 			} else {
-				ok = p.ping(target.ip, timeout)
+				ok = p.ping(target.IP, timeout)
 			}
 			if ctx.Err() != nil {
 				return
@@ -57,9 +57,20 @@ func monitor(ctx context.Context, c *liveConfig, s *monitorState) {
 			if ok {
 				status = "OK"
 			}
-			s.record(i, ok, elapsed, time.Now())
-			s.row(i, fmt.Sprintf("%s  %s  |  %s  |  %.0f мс  |  таймаут %d мс  |  %s", target.name, target.ip, status, float64(elapsed.Microseconds())/1000, timeout.Milliseconds(), time.Now().Format("15:04:05")))
-			results = append(results, result{target.name, ok, elapsed})
+			line := fmt.Sprintf("%s | %s | %.0f мс | таймаут %d мс | %s", cfg.identity(i), status, float64(elapsed.Microseconds())/1000, timeout.Milliseconds(), time.Now().Format("15:04:05"))
+			if !c.publish(generation, s, i, ok, elapsed, time.Now(), line) {
+				break
+			}
+			results = append(results, result{cfg.identity(i), ok, elapsed})
+		}
+		if len(results) != 5 {
+			continue
+		}
+		// Guard cycle journal and disk log against settings publication too.
+		c.mu.RLock()
+		if generation != c.generation {
+			c.mu.RUnlock()
+			continue
 		}
 		line, failed := formatResult(ts, results)
 		available := 0
@@ -71,14 +82,17 @@ func monitor(ctx context.Context, c *liveConfig, s *monitorState) {
 		s.finishCycle(fmt.Sprintf("Цикл завершён · доступны %d из 5 узлов", available))
 		if failed {
 			if _, err = fmt.Fprintln(log, line); err != nil {
+				c.mu.RUnlock()
 				s.event("Ошибка записи лога: " + err.Error())
 				return
 			}
 			if err = log.Sync(); err != nil {
+				c.mu.RUnlock()
 				s.event("Ошибка синхронизации лога: " + err.Error())
 				return
 			}
 		}
+		c.mu.RUnlock()
 		select {
 		case <-ctx.Done():
 			return
