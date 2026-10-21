@@ -8,6 +8,7 @@ import (
 	"path/filepath"
 	"strconv"
 	"syscall"
+	"time"
 	"unsafe"
 )
 
@@ -15,6 +16,27 @@ var settingsWindow, settingsOwner, settingsError uintptr
 var settingsEdits [11]uintptr
 var configPath, configLoadError string
 var settingsClass uint16
+var settingsSlider, settingsPercent, settingsPause uintptr
+
+func applyTransparency(h uintptr, percent int) {
+	style, _, _ := user32.NewProc("GetWindowLongPtrW").Call(h, ^uintptr(19))
+	user32.NewProc("SetWindowLongPtrW").Call(h, ^uintptr(19), layeredStyle(style))
+	user32.NewProc("SetLayeredWindowAttributes").Call(h, 0, uintptr(transparencyAlpha(percent)), 2)
+}
+func refreshSettingsPause() {
+	if settingsPause == 0 {
+		return
+	}
+	label := "Пауза"
+	if guiState.view(time.Now()).Paused {
+		label = "Продолжить"
+	}
+	windowText(settingsPause, label)
+}
+func refreshSettingsPercent() {
+	n, _, _ := sendMessage.Call(settingsSlider, 0x400, 0, 0)
+	windowText(settingsPercent, fmt.Sprintf("%d%%", n))
+}
 
 func readText(h uintptr) string {
 	var b [1024]uint16
@@ -34,8 +56,7 @@ func initializeSettings() {
 	if e != nil {
 		configLoadError = "Не удалось загрузить " + configPath + ": " + e.Error() + ". Используются значения по умолчанию; исходный файл не изменён."
 		guiState.event(configLoadError)
-		settingsHint = configLoadError
-		hintError = true
+
 	}
 }
 func settingsFields(c settings) {
@@ -46,15 +67,8 @@ func settingsFields(c settings) {
 	windowText(settingsEdits[8], c.DNSServer)
 	windowText(settingsEdits[9], c.DNSDomain)
 	windowText(settingsEdits[10], strconv.Itoa(c.TimeoutMS))
-}
-func persistTimeout() error {
-	n, e := parseTimeout(readText(editTimeout))
-	if e != nil {
-		return e
-	}
-	cfg, _ := guiConfig.snapshot()
-	cfg.TimeoutMS = n
-	return guiConfig.commit(configPath, cfg, guiState)
+	sendMessage.Call(settingsSlider, 0x405, 1, uintptr(c.TransparencyPercent))
+	refreshSettingsPercent()
 }
 func openSettings(owner uintptr) {
 	if settingsWindow != 0 {
@@ -77,7 +91,7 @@ func openSettings(owner uintptr) {
 	var r rect
 	user32.NewProc("GetWindowRect").Call(owner, uintptr(unsafe.Pointer(&r)))
 	// Fixed client size, adjusted for native caption at the active system DPI.
-	wr := rect{0, 0, int32(sp(540)), int32(sp(510))}
+	wr := rect{0, 0, int32(sp(540)), int32(sp(610))}
 	user32.NewProc("AdjustWindowRectEx").Call(uintptr(unsafe.Pointer(&wr)), 0x80c80000, 0, 0)
 	h, _, _ := createWindow.Call(0, uintptr(unsafe.Pointer(wide("VPNMonitorSettings"))), uintptr(unsafe.Pointer(wide("VPN монитор — Настройки"))), 0x80c80000, uintptr(r.L+int32(sp(20))), uintptr(r.T+int32(sp(20))), uintptr(wr.R-wr.L), uintptr(wr.B-wr.T), owner, 0, instance, 0)
 	if h == 0 {
@@ -94,6 +108,7 @@ func closeSettings(h uintptr) {
 	user32.NewProc("EnableWindow").Call(settingsOwner, 1)
 	user32.NewProc("DestroyWindow").Call(h)
 	settingsWindow = 0
+	settingsPause = 0
 	user32.NewProc("SetForegroundWindow").Call(settingsOwner)
 }
 func settingsProc(h uintptr, msg uint32, wp, lp uintptr) uintptr {
@@ -115,11 +130,19 @@ func settingsProc(h uintptr, msg uint32, wp, lp uintptr) uintptr {
 			child(h, "STATIC", t, 0, 18, y+3, 260, 24, 0)
 			settingsEdits[8+i] = child(h, "EDIT", "", 0x810080, 293, y, 225, 26, 209+i)
 		}
-		child(h, "STATIC", "Узел 4 управляет графиком и счётчиком сбоев.\r\nИзменение его имени / IP сбрасывает график и счётчик.\r\nСохранение — рядом с EXE; применение со следующего цикла.", 0, 18, 320, 500, 56, 0)
-		settingsError = child(h, "STATIC", configLoadError, 0, 18, 379, 500, 80, 220)
-		child(h, "BUTTON", "По умолчанию", 0x10000, 18, 472, 145, 27, 223)
-		child(h, "BUTTON", "Сохранить", 0x10001, 283, 472, 112, 27, 221)
-		child(h, "BUTTON", "Отмена", 0x10000, 406, 472, 112, 27, 222)
+		child(h, "STATIC", "Прозрачность главного окна", 0, 18, 319, 275, 24, 0)
+		settingsSlider = child(h, "msctls_trackbar32", "", 0x10000, 293, 312, 180, 32, 224)
+		sendMessage.Call(settingsSlider, 0x406, 1, 70<<16)
+		settingsPercent = child(h, "STATIC", "0%", 0, 480, 319, 48, 24, 225)
+		child(h, "STATIC", "0% — непрозрачно · 70% — максимум · после сохранения", 0, 18, 348, 500, 24, 0)
+		settingsPause = child(h, "BUTTON", "Пауза", 0x10000, 18, 380, 145, 28, 226)
+		child(h, "STATIC", "Сразу; не зависит от «Сохранить» / «Отмена»", 0, 177, 384, 345, 24, 0)
+		refreshSettingsPause()
+		child(h, "STATIC", "Узел 4 управляет графиком и счётчиком сбоев.\r\nИзменение его имени / IP сбрасывает график и счётчик.\r\nСохранение — рядом с EXE; сеть — со следующего цикла.", 0, 18, 425, 500, 56, 0)
+		settingsError = child(h, "STATIC", configLoadError, 0, 18, 487, 500, 77, 220)
+		child(h, "BUTTON", "По умолчанию", 0x10000, 18, 572, 145, 27, 223)
+		child(h, "BUTTON", "Сохранить", 0x10001, 283, 572, 112, 27, 221)
+		child(h, "BUTTON", "Отмена", 0x10000, 406, 572, 112, 27, 222)
 		cfg, _ := guiConfig.snapshot()
 		settingsFields(cfg)
 		return 0
@@ -128,6 +151,10 @@ func settingsProc(h uintptr, msg uint32, wp, lp uintptr) uintptr {
 			break
 		}
 		switch wp & 0xffff {
+		case 226:
+			guiState.togglePause()
+			refreshSettingsPause()
+			refresh(settingsOwner)
 		case 2, 222:
 			closeSettings(h)
 		case 223:
@@ -142,6 +169,8 @@ func settingsProc(h uintptr, msg uint32, wp, lp uintptr) uintptr {
 			cfg.DNSDomain = readText(settingsEdits[9])
 			n, e := parseTimeout(readText(settingsEdits[10]))
 			cfg.TimeoutMS = n
+			percent, _, _ := sendMessage.Call(settingsSlider, 0x400, 0, 0)
+			cfg.TransparencyPercent = int(percent)
 			if e == nil {
 				e = cfg.validate()
 			}
@@ -153,13 +182,15 @@ func settingsProc(h uintptr, msg uint32, wp, lp uintptr) uintptr {
 				return 0
 			}
 			configLoadError = ""
-			windowText(editTimeout, strconv.Itoa(n))
-			settingsHint = "Сохранено · со следующего цикла"
-			hintError = false
+			applyTransparency(settingsOwner, cfg.TransparencyPercent)
+
 			windowText(statusLabel, fmt.Sprintf("Действующий таймаут: %d мс", n))
 			closeSettings(h)
 			refresh(settingsOwner)
 		}
+		return 0
+	case 0x114:
+		refreshSettingsPercent()
 		return 0
 	case 0x133, 0x138:
 		gdi.NewProc("SetTextColor").Call(wp, rgb(ink))

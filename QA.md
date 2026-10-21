@@ -1,50 +1,53 @@
-# Local QA: persistent settings
+# Local QA: settings and appearance
 
 ## Repeatable checks
 
 1. Windows x64, interactive desktop, Go in PATH: run `build.cmd`.
-2. Copy `vpn-monitor.exe` into a new empty, writable folder. Never run settings QA
+2. Copy `vpn-monitor.exe` to an empty writable directory. Never run settings QA
    against a user installation or an existing configuration.
 3. Run `python settings_verify.py <isolated-folder>/vpn-monitor.exe` (Python + Pillow).
-   It refuses an existing JSON file, uses real ICMP loopback and an actual local UDP
-   DNS fixture, writes evidence under `<isolated-folder>/qa`, restores defaults through
-   the UI and removes the test JSON. An empty/appended diagnostic log may remain.
-4. Optional: `python icon_verify.py <isolated-folder>/vpn-monitor.exe` checks actual
-   embedded PE icon resources and window/shell icon pixel identity. This older smoke
-   changes/saves timeout; remove the isolated test JSON afterwards.
-5. `compact_verify.py` remains an extended external-network test. It needs actual
-   fourth-target failure at 1 ms and subsequent recovery, so it is not a deterministic
-   gate. Its timeout changes now apply to the next coherent cycle, not each probe.
+   It refuses existing JSON, uses actual ICMP loopback and a local UDP DNS fixture,
+   writes evidence under `<isolated-folder>/qa`, and removes its test JSON.
+   `compact_verify.py` is a compatibility entry point for this same deterministic suite;
+   do not run the two concurrently. The retired external-network main-Apply test
+   is no longer applicable because timeout and pause now live in settings.
+4. Run `python icon_verify.py <isolated-folder>/vpn-monitor.exe` for embedded PE icon
+   resources, WM_GETICON/class handles and shell/runtime icon pixel identity.
+5. Run `python mouse_tooltip_verify.py <isolated-folder>/vpn-monitor.exe` for actual
+   mouse pin toggles and live tooltips. Local logs/screenshots must not be published.
 
-## Settings QA acceptance
+## Acceptance
 
-- Compact main dimensions remain 380×353 logical, journal collapsed initially.
-- Gear/pin/minimize/close hit rectangles do not overlap; settings is a real owned
-  native window, with tab-stop native edit controls and bordered fields, no scrollbars.
-- Cancel, defaults + Cancel and validation errors leave live configuration and disk
-  untouched. Save failure at the actual target path leaves prior live settings intact.
-- Four distinct names with 127.0.0.1 run actual successful ICMP. Custom `fixture.test`
-  is observed on the exact configured local DNS UDP endpoint, no production fake data.
-- Save updates visible labels, addresses, rows, chart target, and persisted JSON.
-- Main timeout Apply persists to the same file; invalid input preserves the old value.
-- Restart loads saved names/addresses/timeout. Malformed original JSON remains unchanged
-  until explicit Save; defaults and an error are visible instead of a crash.
-- Changing fourth identity while paused clears samples, counter and prior result.
-- Pin changes actual WS_EX_TOPMOST; pause settles and freezes probes/cycles; journal,
-  verbosity, resume, no-console GUI subsystem, zero-exit close are exercised.
-- Go tests reject stale-generation publications, verify save failures, round-trip
-  persistence and validation; existing episode/history/pause tests remain enabled.
+- Main is 380×310 logical, journal collapsed, no old 101/102/107 controls or empty row.
+  Journal expands to 380×494 without moving the top-left; header controls do not overlap.
+- Settings uses native bordered tab-stop edits and a native 0–70 trackbar plus percent.
+  Keyboard movement updates its percent. Settings itself never has WS_EX_LAYERED.
+- Transparency is applied only after a successful Save: 0% → alpha255,
+  40% → alpha153, 70% → alpha77, verified by GetLayeredWindowAttributes.
+  Cancel and failed saves leave config, disk and actual main alpha unchanged.
+- Pin modifies actual WS_EX_TOPMOST; saving opacity while pinned preserves it,
+  and unpinning preserves alpha. No click-through style is added.
+- Pause/Continue in settings acts immediately and survives Cancel, freezes probes,
+  cycles and counters after settling, and is not persisted between launches.
+- Appearance-only changes preserve node results, chart samples and outage counter.
+- Real four-ICMP loopback + fixture.test DNS succeeds; saved timeout appears in all rows.
+  Timeout validation covers invalid strings and 1/60000 boundaries.
+- Restart loads targets, timeout and transparency. Old version1 without the optional
+  percent is opaque. Invalid percent and malformed JSON are preserved with visible errors.
+- Defaults fills timeout2000 and transparency0 without applying until Save.
+  Changing fourth identity while paused still resets graph/counter/result.
+- GUI subsystem/no console, zero-exit close and unchanged embedded icons are checked.
+- Uncached Go tests cover persistence/backward compatibility, validation, alpha rounding,
+  preservation of existing extended-style bits, history retention and smaller layout,
+  in addition to prior real networking/episode/generation tests. Run `go vet` too.
 
 ## Observed local verification
 
-Verified on the actual Windows desktop at 120 DPI (125%): main outer rectangle
-475×441 pixels, all local settings GUI assertions passed. Screenshots of settings,
-invalid input, live loopback main and expanded journal were captured and visually
-inspected. Initial QA caught unwanted EDIT horizontal scrollbars; the final native
-fields use explicit client-edge borders and tab stops, and the regression checks
-actual control styles. The embedded ICO and `.syso` resource are unchanged.
+Actual Windows desktop: 120 DPI (125%), main outer size 475×388 pixels.
+Settings, opaque/translucent main and expanded-journal screenshots were captured
+and visually inspected; fields, slider, percent, pause explanation and Save/Cancel fit.
+The test config is removed after QA. The ICO and `.syso` resource remain unchanged.
 
 Not claimed: remote CI/release verification, screen-reader conformance, mixed-DPI
 monitor migration, crash/power-loss durability or simultaneous multi-instance edits.
-No commit, push, tag, or release is performed by this task. Local configs/logs/screenshots
-must not be included in a source commit or release asset.
+The executable remains unsigned. No commits, push, tags or release writes are made here.

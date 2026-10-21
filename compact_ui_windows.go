@@ -22,10 +22,9 @@ var setText = user32.NewProc("SetWindowTextW")
 var guiConfig = newLiveConfig()
 var guiState = newMonitorState()
 var cancelMonitor context.CancelFunc
-var editTimeout, statusLabel, rowsLabel, journalEdit, pauseButton, detailsButton, diagnostic uintptr
+var statusLabel, rowsLabel, journalEdit, detailsButton, diagnostic uintptr
 var pinButton, journalButton, visibleJournal, appSmallIcon, tooltip uintptr
-var settingsHint = "Применяется со следующей проверки"
-var hintError, journalExpanded bool
+var journalExpanded bool
 var editBrush uintptr
 var dpi = 96
 var lastJournal string
@@ -105,12 +104,7 @@ func isPinned(h uintptr) bool {
 }
 func refresh(h uintptr) {
 	v := guiState.view(time.Now())
-	p := "Пауза"
-	if v.Paused {
-		p = "Продолжить"
-	}
-	windowText(pauseButton, p)
-	tool(h, pauseButton, rect{}, p, true, false)
+	refreshSettingsPause()
 	d := "Полные сообщения: выкл."
 	if v.Verbose {
 		d = "Полные сообщения: вкл."
@@ -151,7 +145,7 @@ func refresh(h uintptr) {
 	}
 	tool(h, 599, rect{}, "Сбои "+v.Config.identity(3)+" · эпизоды с запуска / смены узла 4", false, false)
 	tool(h, 598, rect{}, "График за 60 секунд: "+v.Config.identity(3), false, false)
-	tool(h, editTimeout, rect{}, settingsHint, true, false)
+
 	b, _ := json.Marshal(v)
 	windowText(diagnostic, string(b))
 	user32.NewProc("InvalidateRect").Call(h, 0, 0)
@@ -177,17 +171,12 @@ func windowProc(h uintptr, msg uint32, wp, lp uintptr) uintptr {
 			return child(h, class, s, style, r.X, r.Y, r.W, r.H, id)
 		}
 		pinButton = makeControl(0, "BUTTON", "Поверх окон: выключено", 0x1000b, 110)
-		child(h, "BUTTON", "Настройки адресов", 0x1000b, 243, 6, 28, 27, 115)
+		child(h, "BUTTON", "Настройки", 0x1000b, 243, 6, 28, 27, 115)
 		makeControl(1, "BUTTON", "Свернуть", 0x1000b, 113)
 		makeControl(2, "BUTTON", "Закрыть", 0x1000b, 114)
-		editTimeout = makeControl(3, "EDIT", "2000", 0x10080, 101)
-		windowText(editTimeout, fmt.Sprint(guiConfig.timeout().Milliseconds()))
-		sendMessage.Call(editTimeout, 0xc5, 8, 0)
-		makeControl(4, "BUTTON", "Применить", 0x1000b, 102)
-		pauseButton = makeControl(5, "BUTTON", "Пауза", 0x1000b, 107)
-		journalButton = makeControl(6, "BUTTON", "› Журнал событий", 0x1000b, 111)
-		detailsButton = child(h, "BUTTON", "Полные сообщения: выкл.", 0x1000b, 14, 360, 204, 25, 108)
-		visibleJournal = child(h, "EDIT", "", 0x00300844, 14, 394, 352, 108, 112)
+		journalButton = makeControl(3, "BUTTON", "› Журнал событий", 0x1000b, 111)
+		detailsButton = child(h, "BUTTON", "Полные сообщения: выкл.", 0x1000b, 14, 317, 204, 25, 108)
+		visibleJournal = child(h, "EDIT", "", 0x00300844, 14, 351, 352, 108, 112)
 		sendMessage.Call(visibleJournal, 0x30, font(sp(11)), 1)
 		user32.NewProc("ShowWindow").Call(detailsButton, 0)
 		user32.NewProc("ShowWindow").Call(visibleJournal, 0)
@@ -199,7 +188,7 @@ func windowProc(h uintptr, msg uint32, wp, lp uintptr) uintptr {
 		syscall.NewLazyDLL("comctl32.dll").NewProc("InitCommonControls").Call()
 		tooltip, _, _ = createWindow.Call(8, uintptr(unsafe.Pointer(wide("tooltips_class32"))), 0, 0x80000003, 0, 0, 0, 0, h, 0, 0, 0)
 		sendMessage.Call(tooltip, 0x418, 0, uintptr(sp(420)))
-		for _, id := range []int{101, 102, 107, 110, 111, 113, 114, 115} {
+		for _, id := range []int{110, 111, 113, 114, 115} {
 			ch, _, _ := user32.NewProc("GetDlgItem").Call(h, uintptr(id))
 			var b [128]uint16
 			user32.NewProc("GetWindowTextW").Call(ch, uintptr(unsafe.Pointer(&b[0])), 128)
@@ -225,24 +214,7 @@ func windowProc(h uintptr, msg uint32, wp, lp uintptr) uintptr {
 			break
 		}
 		switch wp & 0xffff {
-		case 102:
-			var b [128]uint16
-			user32.NewProc("GetWindowTextW").Call(editTimeout, uintptr(unsafe.Pointer(&b[0])), 128)
-			old := guiConfig.timeout().Milliseconds()
-			if err := persistTimeout(); err != nil {
-				settingsHint = "Не сохранено: " + err.Error()
-				hintError = true
-				windowText(statusLabel, fmt.Sprintf("%s. Действующий таймаут: %d мс", err, old))
-			} else {
-				n := guiConfig.timeout().Milliseconds()
-				configLoadError = ""
-				settingsHint = fmt.Sprintf("Сохранено: %d мс · со следующего цикла", n)
-				hintError = false
-				windowText(statusLabel, fmt.Sprintf("Действующий таймаут: %d мс (со следующего цикла)", n))
-				guiState.event(fmt.Sprintf("%s   Настройки   ·   Таймаут изменён: %d → %d мс", time.Now().Format("15:04:05"), old, n))
-			}
-		case 107:
-			guiState.togglePause()
+
 		case 108:
 			guiState.toggleVerbose()
 		case 110:
@@ -282,11 +254,7 @@ func windowProc(h uintptr, msg uint32, wp, lp uintptr) uintptr {
 			c = 0x20252d
 			border = c
 		}
-		if d.ID == 102 {
-			c = 0x2c405b
-			border = 0x435c7c
-			col = 0xaccfff
-		}
+
 		if d.ID == 110 && isPinned(h) {
 			c = 0x304462
 			border = 0x486891
@@ -317,17 +285,7 @@ func windowProc(h uintptr, msg uint32, wp, lp uintptr) uintptr {
 			user32.NewProc("GetWindowTextW").Call(d.Window, uintptr(unsafe.Pointer(&b[0])), 128)
 			s := syscall.UTF16ToString(b[:])
 			size := 11
-			if d.ID == 102 {
-				s = "✓"
-				size = 15
-			}
-			if d.ID == 107 {
-				s = "Ⅱ"
-				if guiState.view(time.Now()).Paused {
-					s = "▷"
-				}
-				size = 16
-			}
+
 			textCenter(d.DC, 0, 0, w, hh, s, size, col)
 		}
 		gdi.NewProc("RestoreDC").Call(d.DC, saved)
@@ -414,11 +372,14 @@ func main() {
 	ctx, cancel := context.WithCancel(context.Background())
 	cancelMonitor = cancel
 	defer cancel()
-	h, _, err := createWindow.Call(0, uintptr(unsafe.Pointer(wc.Name)), uintptr(unsafe.Pointer(wide("VPN монитор"))), 0x820a0000, 100, 80, uintptr(sp(380)), uintptr(sp(353)), 0, 0, instance, 0)
+	size := compactDimensions(false)
+	h, _, err := createWindow.Call(0, uintptr(unsafe.Pointer(wc.Name)), uintptr(unsafe.Pointer(wide("VPN монитор"))), 0x820a0000, 100, 80, uintptr(sp(size.Width)), uintptr(sp(size.Height)), 0, 0, instance, 0)
 	if h == 0 {
 		showFatal(fmt.Sprint(err))
 		return
 	}
+	cfg, _ := guiConfig.snapshot()
+	applyTransparency(h, cfg.TransparencyPercent)
 	sendMessage.Call(h, 0x80, 1, bigIcon)
 	sendMessage.Call(h, 0x80, 0, smallIcon)
 	user32.NewProc("ShowWindow").Call(h, 5)

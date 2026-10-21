@@ -17,15 +17,16 @@ type targetConfig struct {
 	IP   string `json:"ipv4"`
 }
 type settings struct {
-	Version   int             `json:"version"`
-	Targets   [4]targetConfig `json:"targets"`
-	DNSServer string          `json:"dns_server"`
-	DNSDomain string          `json:"dns_domain"`
-	TimeoutMS int             `json:"timeout_ms"`
+	Version             int             `json:"version"`
+	Targets             [4]targetConfig `json:"targets"`
+	DNSServer           string          `json:"dns_server"`
+	DNSDomain           string          `json:"dns_domain"`
+	TimeoutMS           int             `json:"timeout_ms"`
+	TransparencyPercent int             `json:"transparency_percent"`
 }
 
 func defaultSettings() settings {
-	return settings{1, [4]targetConfig{{"Debian", "192.168.1.107"}, {"Router", "192.168.1.100"}, {"Yandex", "77.88.44.242"}, {"YouTube", "192.178.24.110"}}, "192.168.1.107:53", "youtube.com", 2000}
+	return settings{1, [4]targetConfig{{"Debian", "192.168.1.107"}, {"Router", "192.168.1.100"}, {"Yandex", "77.88.44.242"}, {"YouTube", "192.178.24.110"}}, "192.168.1.107:53", "youtube.com", 2000, 0}
 }
 func (c settings) validate() error {
 	if c.Version != 1 {
@@ -57,6 +58,9 @@ func (c settings) validate() error {
 				return fmt.Errorf("DNS: используйте ASCII / punycode, без пробелов и URL")
 			}
 		}
+	}
+	if c.TransparencyPercent < 0 || c.TransparencyPercent > 70 {
+		return fmt.Errorf("Прозрачность: от 0 до 70%%")
 	}
 	if c.TimeoutMS < 1 || c.TimeoutMS > 60000 {
 		return fmt.Errorf("Введите целое число от 1 до 60000 мс")

@@ -185,30 +185,17 @@ func drawDashboard(dc, h uintptr) {
 		text(dc, 89, 235, 277, 27, "Нет успешных ответов", 10, muted)
 	}
 	stroke(dc, 14, 273, 366, 273, lineColor, 1)
-	text(dc, 14, 281, 58, 25, "Таймаут", 11, muted)
-	box(dc, 75, 280, 62, 27, 0x10151c, 0x3c4758)
-	text(dc, 142, 281, 18, 25, "мс", 11, muted)
-	feedback := ""
-	hc := muted
-	if hintError {
-		feedback = "Ошибка · см. подсказку"
-		hc = red
-	} else if settingsHint != "Применяется со следующей проверки" {
-		feedback = "Сохранено"
-		hc = green
-	}
-	text(dc, 201, 281, 125, 25, feedback, 10, hc)
-	fill(dc, 0, 319, 380, 34, 0x1c2129)
-	stroke(dc, 0, 319, 380, 319, lineColor, 1)
+	fill(dc, 0, 276, 380, 34, 0x1c2129)
+	stroke(dc, 0, 276, 380, 276, lineColor, 1)
 	stamp := "Ожидание…"
 	if !last.IsZero() {
 		stamp = "Обновлено " + last.Format("15:04:05")
 	}
-	label(dc, 190, 323, 175, 26, stamp, 10, muted, 2)
+	label(dc, 190, 280, 175, 26, stamp, 10, muted, 2)
 	if journalExpanded {
-		fill(dc, 1, 353, 378, 183, 0x14191f)
-		stroke(dc, 0, 353, 380, 353, lineColor, 1)
-		text(dc, 14, 509, 352, 21, "Счётчик с запуска · лог: vpn-diag.log", 10, muted)
+		fill(dc, 1, 310, 378, 183, 0x14191f)
+		stroke(dc, 0, 310, 380, 310, lineColor, 1)
+		text(dc, 14, 466, 352, 21, "Счётчик с запуска · лог: vpn-diag.log", 10, muted)
 	}
 	border := 0x3a424e
 	if isPinned(h) {

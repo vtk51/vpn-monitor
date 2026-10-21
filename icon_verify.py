@@ -1,4 +1,6 @@
-"""Bounded real-window icon / Apply / pause smoke test (Windows + Pillow)."""
+"""Bounded real-window icon smoke test (Windows + Pillow).
+Settings, timeout and pause are covered by settings_verify.py.
+"""
 import ctypes as c
 from ctypes import wintypes as w
 import subprocess,time,sys,json,struct,hashlib
@@ -108,11 +110,7 @@ try:
  waitfor(lambda:text(children[109]))
  def view():return json.loads(text(children[109]))
  def click(i):u.SendMessageW(children[i],0xf5,0,0);time.sleep(.12)
- val=c.create_unicode_buffer('137');u.SendMessageW(children[101],12,0,c.addressof(val));click(102)
- assert '137 мс' in text(children[103]);report['apply']=True
- click(107);assert view()['Paused'];time.sleep(1)
- frozen=view();time.sleep(1);assert frozen['Nodes']==view()['Nodes'] and frozen['YouTubeOutages']==view()['YouTubeOutages']
- click(107);assert not view()['Paused'];report['pause_resume_counter']=True
+ assert all(i not in children for i in (101,102,107));report['legacy_main_controls_absent']=True
  waitfor(lambda:view()['Nodes'][0]['Seen'])
  for win in windows(p.pid):
   cls=c.create_unicode_buffer(100);u.GetClassNameW(win,cls,100);assert cls.value!='ConsoleWindowClass'
